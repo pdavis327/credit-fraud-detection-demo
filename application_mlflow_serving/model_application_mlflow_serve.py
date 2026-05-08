@@ -15,7 +15,7 @@ GRADIO_SERVER_NAME = os.getenv("GRADIO_SERVER_NAME")        # Automatically set 
 mlflow.set_tracking_uri(MLFLOW_ROUTE)
 
 # Specify what model and version we want to load, and then load it.
-model_name = "DNN-credit-card-fraud"
+model_name = "credit-card-fraud-onnx"
 model_version = 1
 model = mlflow.pyfunc.load_model(
     model_uri=f"models:/{model_name}/{model_version}"
