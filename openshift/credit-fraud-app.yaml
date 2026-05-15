@@ -1,0 +1,86 @@
+# Deploy Gradio UI after pushing the image from application/ (see README in repo root).
+# Edit image + INFERENCE_ENDPOINT, then:
+#   oc apply -n credit-card-fraud -f openshift/credit-fraud-app.yaml
+#
+# If Quay is private, link a pull secret to the default SA first, e.g.:
+#   oc create secret docker-registry quay-pull-secret ... -n credit-card-fraud
+#   oc secrets link default quay-pull-secret --for=pull -n credit-card-fraud
+#
+# Model inference: internal KServe predictor (HTTP :8080 in this cluster).
+# INFERENCE_ENDPOINT = <predictor-svc>/v2/models/<model-id>/infer
+# (ModelMesh example from the lab used modelmesh-serving:8008 — not used here.)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: credit-fraud-app
+  name: credit-fraud-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: credit-fraud-app
+  template:
+    metadata:
+      labels:
+        app: credit-fraud-app
+    spec:
+      containers:
+        - name: app
+          image: quay.io/rh-ee-petdavis/cc-fraud-demo:6
+          imagePullPolicy: Always
+          ports:
+            # Gradio listens here; 8080 is a common conflict on OpenShift — use 7860 (Gradio default).
+            - containerPort: 7860
+              protocol: TCP
+          env:
+            # credit-card-fraud-onnx-v2-predictor + V2 REST model id (see RHOAI if 404).
+            - name: INFERENCE_ENDPOINT
+              value: "https://ccfraud-v2-credit-card-fraud.apps.cluster-kjpfb.kjpfb.sandbox5560.opentlc.com/v2/models/ccfraud-v2/infer"
+            - name: GRADIO_SERVER_PORT
+              value: "7860"
+          readinessProbe:
+            tcpSocket:
+              port: 7860
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 7860
+            initialDelaySeconds: 30
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: credit-fraud-app
+  name: credit-fraud-app
+spec:
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: 7860
+  selector:
+    app: credit-fraud-app
+  type: ClusterIP
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  labels:
+    app: credit-fraud-app
+  name: credit-fraud-app
+spec:
+  port:
+    targetPort: http
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: edge
+  to:
+    kind: Service
+    name: credit-fraud-app
+    weight: 100
+  wildcardPolicy: None
