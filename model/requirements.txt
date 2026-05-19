@@ -4,7 +4,7 @@ tensorflow
 matplotlib
 scikit-learn
 seaborn
-mlflow
+mlflow[kubernetes]>=3.11
 tf2onnx
 onnxruntime
 tensorboard
