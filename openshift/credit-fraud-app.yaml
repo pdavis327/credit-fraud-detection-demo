@@ -41,7 +41,7 @@ spec:
             - name: INFERENCE_ENDPOINT
               value: "https://ccfraud-v2-credit-card-fraud.apps.cluster-kjpfb.kjpfb.sandbox5560.opentlc.com/v2/models/ccfraud-v2/infer"
             - name: FEAST_SERVING_URL
-              value: "http://feast-credit-fraud-feast-online.credit-card-fraud.svc:6566"
+              value: "https://feast-credit-fraud-feast-online.credit-card-fraud.svc:443"
             - name: FEAST_REPO_PATH
               value: "/app/feast"
             - name: GRADIO_SERVER_PORT
