@@ -2,11 +2,10 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
 FEAST_DIR = Path(__file__).resolve().parents[1]
 
 FEATURE_COLUMNS = [
@@ -76,7 +75,9 @@ def main() -> None:
     write_transaction_examples(df, FEAST_DIR / "transaction_examples.json")
 
     print(f"Wrote {len(df)} rows to {args.output}")
-    print("Upload to MinIO at: feast/credit-fraud/transactions.parquet")
+    print("Upload to MinIO:")
+    print(f"  bucket: rhoai  (AWS_S3_BUCKET)")
+    print(f"  key:    {os.getenv('FEAST_S3_PREFIX', 'feast/credit-fraud')}/transactions.parquet")
     print(f"Updated {FEAST_DIR / 'transaction_examples.json'}")
 
 
