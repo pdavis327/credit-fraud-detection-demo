@@ -282,16 +282,8 @@ This demo uses [Feast](https://feast.dev/) on OpenShift AI to serve consistent f
 #### Architecture with Feast
 
 ```text
-card_transdata.csv → upload_to_s3.py → MinIO (shared-s3)
-                                         ↓ FileSource in feast/example_repo.py
-                                         ↓ get_historical_features (training notebook)
-                                         ↓ feast materialize
-                                         ↓ get_online_features (Gradio app) → KServe ONNX
-```
-
-```text
-card_transdata.csv → upload_to_s3.py → MinIO (shared-s3)
-                                         ↓ FileSource in feast/example_repo.py
+card_transdata.csv → prepare_data.py → feast/data/transactions.parquet
+                                         → upload manually to MinIO (shared-s3)
                                          ↓ get_historical_features (training notebook)
                                          ↓ feast materialize
                                          ↓ get_online_features (Gradio app) → KServe ONNX
@@ -299,24 +291,24 @@ card_transdata.csv → upload_to_s3.py → MinIO (shared-s3)
 
 #### Upload training data to MinIO
 
-MLflow and this demo use MinIO in the **`shared-s3`** namespace. Inside the cluster the API is `http://minio-service.shared-s3.svc:9000`; the external route is on `minio-api-shared-s3.apps.<cluster>`.
-
-The `credit-card-fraud` namespace already has a **`shared-s3`** secret (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`) — same pattern as MLflow data connections.
+Create the file locally, then upload it yourself via the MinIO console:
 
 ```bash
-export AWS_ACCESS_KEY_ID=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
-export AWS_SECRET_ACCESS_KEY=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
-export AWS_S3_BUCKET=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_S3_BUCKET}' | base64 -d)
-export AWS_S3_ENDPOINT=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_S3_ENDPOINT}' | base64 -d)
-
-pip install boto3 pandas pyarrow
-python feast/scripts/upload_to_s3.py          # 10k rows
-python feast/scripts/upload_to_s3.py --full   # full CSV
+pip install pandas pyarrow
+python feast/scripts/prepare_data.py          # writes feast/data/transactions.parquet (10k rows)
+python feast/scripts/prepare_data.py --full   # optional: entire CSV
 ```
 
-Object path: `s3://<bucket>/feast/credit-fraud/transactions.parquet`
+Upload **`feast/data/transactions.parquet`** to your MLflow bucket:
 
-Add the same `AWS_*` variables to your **workbench** (Config Map / secret ref) so the training notebook can read labels from S3.
+| Field | Value |
+|-------|--------|
+| Bucket | `AWS_S3_BUCKET` from secret `shared-s3` in `credit-card-fraud` |
+| Object key | `feast/credit-fraud/transactions.parquet` |
+
+MinIO UI: `https://minio-api-shared-s3.apps.<your-cluster>/`
+
+Add the `AWS_*` variables from `shared-s3` to your **workbench** so the training notebook can read from S3.
 
 #### Deploy the FeatureStore instance
 
@@ -355,7 +347,7 @@ Open `model/credit-card-fraud-model-openshift-ai.ipynb`. The notebook:
 3. Trains the DNN and saves scaler parameters to `feast/scaler_params.json`
 4. Documents how to materialize features for inference
 
-See [`feast/README.md`](feast/README.md) for upload details.
+See [`feast/README.md`](feast/README.md) for Parquet prep and MinIO upload path.
 
 #### Materialize to the online store
 

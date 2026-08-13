@@ -2,27 +2,34 @@
 
 **Definitions** (entity, feature views) live in git and are applied by the Feast operator.
 
-**Training data** lives in MinIO (`shared-s3` namespace), not in this repo.
+**Training data** lives on MinIO (`shared-s3` namespace), not in git.
 
-## Upload data to MinIO
-
-From a machine with access to the cluster secret values (workbench or laptop with `oc`):
+## 1. Create the Parquet file locally
 
 ```bash
-# Load credentials from the credit-card-fraud namespace secret
-export AWS_ACCESS_KEY_ID=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
-export AWS_SECRET_ACCESS_KEY=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
-export AWS_S3_BUCKET=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_S3_BUCKET}' | base64 -d)
-export AWS_S3_ENDPOINT=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_S3_ENDPOINT}' | base64 -d)
-
-pip install boto3 pandas pyarrow
-python feast/scripts/upload_to_s3.py          # 10k rows (default)
-python feast/scripts/upload_to_s3.py --full   # entire CSV
+pip install pandas pyarrow
+python feast/scripts/prepare_data.py          # 10k rows → feast/data/transactions.parquet
+python feast/scripts/prepare_data.py --full   # entire CSV
 ```
 
-Object path: `s3://<AWS_S3_BUCKET>/feast/credit-fraud/transactions.parquet`
+## 2. Upload manually to MinIO
 
-**In-cluster endpoint** (used by Feast pods): `http://minio-service.shared-s3.svc:9000`  
-**External route** (console / laptop): `https://minio-api-shared-s3.apps.<cluster>/`
+Upload `feast/data/transactions.parquet` via the MinIO console or CLI.
 
-After uploading, re-apply the FeatureStore CR if you changed git definitions, then restart the feast pod or run `feast apply` in the online container.
+| Setting | Value |
+|---------|--------|
+| Bucket | Same as MLflow / `shared-s3` secret (`AWS_S3_BUCKET` in `credit-card-fraud`) |
+| Object key | `feast/credit-fraud/transactions.parquet` |
+
+MinIO UI route: `https://minio-api-shared-s3.apps.<your-cluster>/`
+
+Feast pods read this path using the in-cluster endpoint `http://minio-service.shared-s3.svc:9000` and credentials from the `shared-s3` secret.
+
+## 3. Apply Feast definitions
+
+Push git changes, then:
+
+```bash
+oc apply -n credit-card-fraud -f openshift/feast-instance.yaml
+oc delete pod -n credit-card-fraud -l feast.dev/feature-store=credit-fraud-feast
+```

@@ -1,6 +1,42 @@
 [
   {
+    "transaction_id": 13,
+    "label": "fraud"
+  },
+  {
+    "transaction_id": 24,
+    "label": "fraud"
+  },
+  {
+    "transaction_id": 29,
+    "label": "fraud"
+  },
+  {
+    "transaction_id": 35,
+    "label": "fraud"
+  },
+  {
+    "transaction_id": 36,
+    "label": "fraud"
+  },
+  {
     "transaction_id": 0,
+    "label": "not fraud"
+  },
+  {
+    "transaction_id": 1,
+    "label": "not fraud"
+  },
+  {
+    "transaction_id": 2,
+    "label": "not fraud"
+  },
+  {
+    "transaction_id": 3,
+    "label": "not fraud"
+  },
+  {
+    "transaction_id": 4,
     "label": "not fraud"
   }
 ]

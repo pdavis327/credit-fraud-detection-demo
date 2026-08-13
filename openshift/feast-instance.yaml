@@ -1,12 +1,7 @@
 # FeatureStore instance for the credit card fraud demo.
-# Training data lives in MinIO (shared-s3); definitions stay in git (feast/).
+# Training data: upload feast/data/transactions.parquet to MinIO (see feast/README.md).
 #
-# Prerequisites:
-#   1. Upload parquet: python feast/scripts/upload_to_s3.py
-#   2. Push feast/ to git, then apply this CR:
-#      oc apply -n credit-card-fraud -f openshift/feast-instance.yaml
-#
-# Uses secret `shared-s3` in this namespace (same keys as MLflow data connections).
+#   oc apply -n credit-card-fraud -f openshift/feast-instance.yaml
 ---
 apiVersion: feast.dev/v1
 kind: FeatureStore
