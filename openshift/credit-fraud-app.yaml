@@ -1,5 +1,7 @@
-# Deploy Gradio UI after pushing the image from application/ (see README in repo root).
-# Edit image + INFERENCE_ENDPOINT, then:
+# Deploy Gradio UI after building from repo root (includes feast/):
+#   docker build -f application/Dockerfile -t quay.io/rh-ee-petdavis/cc-fraud-demo:7 .
+#   docker push quay.io/rh-ee-petdavis/cc-fraud-demo:7
+# Edit image + endpoints below, then:
 #   oc apply -n credit-card-fraud -f openshift/credit-fraud-app.yaml
 #
 # If Quay is private, link a pull secret to the default SA first, e.g.:
@@ -38,6 +40,10 @@ spec:
             # credit-card-fraud-onnx-v2-predictor + V2 REST model id (see RHOAI if 404).
             - name: INFERENCE_ENDPOINT
               value: "https://ccfraud-v2-credit-card-fraud.apps.cluster-kjpfb.kjpfb.sandbox5560.opentlc.com/v2/models/ccfraud-v2/infer"
+            - name: FEAST_SERVING_URL
+              value: "http://feast-credit-fraud-feast-online.credit-card-fraud.svc:6566"
+            - name: FEAST_REPO_PATH
+              value: "/app/feast"
             - name: GRADIO_SERVER_PORT
               value: "7860"
           readinessProbe:

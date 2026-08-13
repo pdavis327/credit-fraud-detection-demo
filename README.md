@@ -264,6 +264,116 @@ Follow the steps of the [next section](#6-deploy-the-model-application) to see h
     - **Name**: `MLFLOW_ROUTE`
     - **Value**: The MLFlow route from [step one](#11-mlflow-route-through-the-visual-interface) (`http://mlflow-server.mlflow.svc.cluster.local:8080` for example)
 
+### Feature Store (Feast)
+
+This demo uses [Feast](https://feast.dev/) on OpenShift AI to serve consistent features for **training** (offline store) and **inference** (online store).
+
+#### Feast concepts in this demo
+
+| Concept | Role here |
+|---------|-----------|
+| **Entity** | `transaction_id` — primary key for each transaction row |
+| **Feature** | One model input column (e.g. `distance_from_home`) |
+| **Feature view** | `transaction_features` — the seven inputs grouped together |
+| **Offline store** | Historical Parquet data for `get_historical_features()` in the training notebook |
+| **Online store** | Low-latency SQLite store populated by `feast materialize` for `get_online_features()` in the Gradio app |
+| **Registry** | Metadata catalog (entities, schemas, data sources) managed by the Feast operator |
+
+#### Architecture with Feast
+
+```text
+card_transdata.csv → transactions_sample.parquet → Feast offline store
+                                                    ↓ get_historical_features (training notebook)
+                                                    ↓ feast materialize
+                                                    ↓ get_online_features (Gradio app) → KServe ONNX
+```
+
+#### Deploy the FeatureStore instance
+
+After pushing the `feast/` directory to your git repo, apply the CR in your Data Science project namespace:
+
+```bash
+oc apply -n credit-card-fraud -f openshift/feast-instance.yaml
+```
+
+Verify the feast pod is running:
+
+```bash
+oc get pods -n credit-card-fraud -l feast.dev/feature-store=credit-fraud-feast
+oc get svc -n credit-card-fraud -l feast.dev/service-type=online
+```
+
+In the feast pod terminal (`online` container), register feature definitions:
+
+```bash
+feast apply
+feast entities list
+```
+
+#### Connect your workbench
+
+In the OpenShift AI dashboard: **Data Science Projects** → your project → **Integrations** → **Feature Store** → connect your workbench. This injects client configuration so the notebook SDK can reach the remote feature server.
+
+#### Train with offline features
+
+Open `model/credit-card-fraud-model-openshift-ai.ipynb`. The notebook:
+
+1. Builds an entity frame from `feast/data/transactions_sample.parquet`
+2. Calls `store.get_historical_features()` for the seven transaction features
+3. Trains the DNN and saves scaler parameters to `feast/scaler_params.json`
+4. Documents how to materialize features for inference
+
+To regenerate the sample Parquet from the full CSV (optional, for more rows):
+
+```bash
+python feast/scripts/prepare_data.py --nrows 10000
+```
+
+#### Materialize to the online store
+
+In the feast pod terminal:
+
+```bash
+feast materialize 2020-01-01T00:00:00 2026-12-31T00:00:00
+```
+
+This copies offline features into the online store so the Gradio app can fetch them at inference time.
+
+#### Gradio app environment variables
+
+When deploying the application, set:
+
+| Variable | Example | Purpose |
+|----------|---------|---------|
+| `INFERENCE_ENDPOINT` | `http://.../v2/models/ccfraud-v2/infer` | KServe V2 ONNX endpoint |
+| `FEAST_SERVING_URL` | `http://feast-credit-fraud-feast-online.credit-card-fraud.svc:6566` | Remote online feature server |
+| `FEAST_REPO_PATH` | `/app/feast` | Feast project bundled in the container image |
+
+Build the app image from the **repository root** (so `feast/` is included):
+
+```bash
+docker build -f application/Dockerfile -t quay.io/<user>/cc-fraud-demo:feast .
+```
+
+Or apply [`openshift/credit-fraud-app.yaml`](openshift/credit-fraud-app.yaml) after updating the image tag.
+
+#### Feast troubleshooting
+
+```bash
+# Online feature server service name
+oc get svc -n credit-card-fraud -l feast.dev/service-type=online
+
+# Registry route (if REST API enabled)
+oc get route -n credit-card-fraud -l feast.dev/service-type=registry
+
+# Re-apply feature definitions after git push
+oc create job --from=cronjob/feast-credit-fraud-feast feast-apply-manual-$(date +%s) -n credit-card-fraud
+```
+
+- **401/403 on feature server:** cluster may use OIDC for Feast; ensure your workbench or app service account has RBAC on the Feature Store instance.
+- **Empty scaler error in Gradio:** run the training notebook to populate `feast/scaler_params.json`.
+- **Online features missing:** run `feast materialize` after `feast apply`.
+
 ### 6: Deploy the model application
 The model application is a visual interface for interacting with the model. You can use it to send data to the model and get a prediction of whether a transaction is fraudulent or not.   
 You can find the model application code in the "application" folder in the GitHub repository you cloned in [step 3](#3-train-the-model).
@@ -304,6 +414,12 @@ Set these values in the **Environment variables (runtime only)** fields:
 - **Value**: In the RHODS projects interface (from the previous section), copy the "restURL" and add `/v2/models/credit-card-fraud/infer` to the end if it's not already there. For example: `http://modelmesh-serving.credit-card-fraud:8008/v2/models/credit-card-fraud/infer`
 ![Model Serving UR](img/Model_Serving_URL.png)
 
+- **Name**: `FEAST_SERVING_URL`
+- **Value**: `http://feast-credit-fraud-feast-online.credit-card-fraud.svc:6566` (verify with `oc get svc -n credit-card-fraud -l feast.dev/service-type=online`)
+
+- **Name**: `FEAST_REPO_PATH`
+- **Value**: `/app/feast` (when using the Dockerfile built from repo root; see [Feature Store (Feast)](#feature-store-feast))
+
 
 Your full settings page should look something like this:
 
@@ -322,6 +438,6 @@ When the application has been deployed you can press the "Open URL" button to op
 
 Congratulations, you now have an application running your AI model!
 
-Try entering a few values and see if it predicts it as a credit fraud or not. You can select one of the examples at the bottom of the application page.
+Try selecting a transaction ID from the dropdown. The app fetches features from Feast, scales them, and sends them to the model server for a fraud prediction.
 
 ![Gradio](img/Gradio.PNG)

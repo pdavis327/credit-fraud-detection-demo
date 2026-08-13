@@ -1,0 +1,25 @@
+# FeatureStore instance for the credit card fraud demo.
+# Apply after pushing feast/ to the git repo referenced below:
+#   oc apply -n credit-card-fraud -f openshift/feast-instance.yaml
+#
+# Verify:
+#   oc get pods -n credit-card-fraud -l feast.dev/feature-store=credit-fraud-feast
+#   oc get svc -n credit-card-fraud -l feast.dev/service-type=online
+---
+apiVersion: feast.dev/v1
+kind: FeatureStore
+metadata:
+  name: credit-fraud-feast
+  labels:
+    feature-store-ui: enabled
+spec:
+  feastProject: credit_fraud
+  feastProjectDir:
+    git:
+      url: https://github.com/pdavis327/credit-fraud-detection-demo
+      ref: main
+  services:
+    registry:
+      local:
+        server:
+          restAPI: true

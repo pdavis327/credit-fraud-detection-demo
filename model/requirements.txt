@@ -1,3 +1,5 @@
+# Dependencies for Credit Card Fraud Detection (OpenShift AI + MLflow)
+# Note: Using specific versions/packages to ensure ONNX compatibility and MLflow kubernetes auth.
 numpy
 pandas
 tensorflow
@@ -8,3 +10,5 @@ mlflow[kubernetes]>=3.11
 tf2onnx
 onnxruntime
 tensorboard
+feast>=0.47.0
+pyarrow

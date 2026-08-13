@@ -1,0 +1,29 @@
+{
+  "feature_names": [
+    "distance_from_home",
+    "distance_from_last_transaction",
+    "ratio_to_median_purchase_price",
+    "repeat_retailer",
+    "used_chip",
+    "used_pin_number",
+    "online_order"
+  ],
+  "mean": [
+    26.374744202461542,
+    4.807106681452965,
+    1.8241643044773999,
+    0.879,
+    0.3508,
+    0.1048,
+    0.6415
+  ],
+  "scale": [
+    58.81110561949397,
+    22.260124478587166,
+    2.76243825810871,
+    0.3261435833550867,
+    0.47724431501446024,
+    0.3063108594781835,
+    0.4795839343378878
+  ]
+}
