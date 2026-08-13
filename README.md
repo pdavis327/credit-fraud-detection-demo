@@ -323,7 +323,7 @@ The CR sets `featureRepoPath: feast` and mounts the `shared-s3` secret so Feast 
 Verify the feast pod is running:
 
 ```bash
-oc get pods -n credit-card-fraud -l feast.dev/feature-store=credit-fraud-feast
+oc get pods -n credit-card-fraud -l feast.dev/name=credit-fraud-feast
 oc get svc -n credit-card-fraud -l feast.dev/service-type=online
 ```
 
@@ -336,7 +336,24 @@ feast entities list
 
 #### Connect your workbench
 
-In the OpenShift AI dashboard: **Data Science Projects** → your project → **Integrations** → **Feature Store** → connect your workbench. This injects client configuration so the notebook SDK can reach the remote feature server.
+When **creating or editing** the workbench (not a separate Integrations tab), scroll to **Feature Store Configuration** and select the `credit-fraud-feast` instance. After you update the workbench, client config is mounted at:
+
+```text
+/opt/app-root/src/feast-config/credit_fraud
+```
+
+Use it in Python (the UI example uses a banking placeholder path — replace with yours):
+
+```python
+from feast import FeatureStore
+
+store = FeatureStore(fs_yaml_file="/opt/app-root/src/feast-config/credit_fraud")
+store.list_feature_views()
+store.get_historical_features(...)
+store.get_online_features(...)
+```
+
+Also add `AWS_*` variables from the `shared-s3` secret under **Edit workbench → Environment variables** so the notebook can read labels from MinIO Parquet.
 
 #### Train with offline features
 
