@@ -275,18 +275,48 @@ This demo uses [Feast](https://feast.dev/) on OpenShift AI to serve consistent f
 | **Entity** | `transaction_id` — primary key for each transaction row |
 | **Feature** | One model input column (e.g. `distance_from_home`) |
 | **Feature view** | `transaction_features` — the seven inputs grouped together |
-| **Offline store** | Historical Parquet data for `get_historical_features()` in the training notebook |
+| **Offline store** | Parquet on **MinIO** (`shared-s3`) — `get_historical_features()` in the notebook |
 | **Online store** | Low-latency SQLite store populated by `feast materialize` for `get_online_features()` in the Gradio app |
 | **Registry** | Metadata catalog (entities, schemas, data sources) managed by the Feast operator |
 
 #### Architecture with Feast
 
 ```text
-card_transdata.csv → transactions_sample.parquet → Feast offline store
-                                                    ↓ get_historical_features (training notebook)
-                                                    ↓ feast materialize
-                                                    ↓ get_online_features (Gradio app) → KServe ONNX
+card_transdata.csv → upload_to_s3.py → MinIO (shared-s3)
+                                         ↓ FileSource in feast/example_repo.py
+                                         ↓ get_historical_features (training notebook)
+                                         ↓ feast materialize
+                                         ↓ get_online_features (Gradio app) → KServe ONNX
 ```
+
+```text
+card_transdata.csv → upload_to_s3.py → MinIO (shared-s3)
+                                         ↓ FileSource in feast/example_repo.py
+                                         ↓ get_historical_features (training notebook)
+                                         ↓ feast materialize
+                                         ↓ get_online_features (Gradio app) → KServe ONNX
+```
+
+#### Upload training data to MinIO
+
+MLflow and this demo use MinIO in the **`shared-s3`** namespace. Inside the cluster the API is `http://minio-service.shared-s3.svc:9000`; the external route is on `minio-api-shared-s3.apps.<cluster>`.
+
+The `credit-card-fraud` namespace already has a **`shared-s3`** secret (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`) — same pattern as MLflow data connections.
+
+```bash
+export AWS_ACCESS_KEY_ID=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+export AWS_SECRET_ACCESS_KEY=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+export AWS_S3_BUCKET=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_S3_BUCKET}' | base64 -d)
+export AWS_S3_ENDPOINT=$(oc get secret shared-s3 -n credit-card-fraud -o jsonpath='{.data.AWS_S3_ENDPOINT}' | base64 -d)
+
+pip install boto3 pandas pyarrow
+python feast/scripts/upload_to_s3.py          # 10k rows
+python feast/scripts/upload_to_s3.py --full   # full CSV
+```
+
+Object path: `s3://<bucket>/feast/credit-fraud/transactions.parquet`
+
+Add the same `AWS_*` variables to your **workbench** (Config Map / secret ref) so the training notebook can read labels from S3.
 
 #### Deploy the FeatureStore instance
 
@@ -295,6 +325,8 @@ After pushing the `feast/` directory to your git repo, apply the CR in your Data
 ```bash
 oc apply -n credit-card-fraud -f openshift/feast-instance.yaml
 ```
+
+The CR sets `featureRepoPath: feast` and mounts the `shared-s3` secret so Feast pods can read MinIO during `feast apply` and serving.
 
 Verify the feast pod is running:
 
@@ -318,16 +350,12 @@ In the OpenShift AI dashboard: **Data Science Projects** → your project → **
 
 Open `model/credit-card-fraud-model-openshift-ai.ipynb`. The notebook:
 
-1. Builds an entity frame from `feast/data/transactions_sample.parquet`
-2. Calls `store.get_historical_features()` for the seven transaction features
+1. Loads entity keys and labels from the MinIO Parquet object
+2. Calls `store.get_historical_features()` (features resolved from the same S3 path via Feast)
 3. Trains the DNN and saves scaler parameters to `feast/scaler_params.json`
 4. Documents how to materialize features for inference
 
-To regenerate the sample Parquet from the full CSV (optional, for more rows):
-
-```bash
-python feast/scripts/prepare_data.py --nrows 10000
-```
+See [`feast/README.md`](feast/README.md) for upload details.
 
 #### Materialize to the online store
 
@@ -346,7 +374,7 @@ When deploying the application, set:
 | Variable | Example | Purpose |
 |----------|---------|---------|
 | `INFERENCE_ENDPOINT` | `http://.../v2/models/ccfraud-v2/infer` | KServe V2 ONNX endpoint |
-| `FEAST_SERVING_URL` | `http://feast-credit-fraud-feast-online.credit-card-fraud.svc:6566` | Remote online feature server |
+| `FEAST_SERVING_URL` | `https://feast-credit-fraud-feast-online.credit-card-fraud.svc:443` | Remote online feature server (TLS) |
 | `FEAST_REPO_PATH` | `/app/feast` | Feast project bundled in the container image |
 
 Build the app image from the **repository root** (so `feast/` is included):
@@ -415,7 +443,7 @@ Set these values in the **Environment variables (runtime only)** fields:
 ![Model Serving UR](img/Model_Serving_URL.png)
 
 - **Name**: `FEAST_SERVING_URL`
-- **Value**: `http://feast-credit-fraud-feast-online.credit-card-fraud.svc:6566` (verify with `oc get svc -n credit-card-fraud -l feast.dev/service-type=online`)
+- **Value**: `https://feast-credit-fraud-feast-online.credit-card-fraud.svc:443` (verify with `oc get svc -n credit-card-fraud -l feast.dev/service-type=online`)
 
 - **Name**: `FEAST_REPO_PATH`
 - **Value**: `/app/feast` (when using the Dockerfile built from repo root; see [Feature Store (Feast)](#feature-store-feast))

@@ -11,4 +11,6 @@ tf2onnx
 onnxruntime
 tensorboard
 feast>=0.47.0
-pyarrow
+pyarrow>=12.0.0
+pyyaml>=6.0
+boto3>=1.28.0

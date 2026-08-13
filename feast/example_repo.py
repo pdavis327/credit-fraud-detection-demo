@@ -1,7 +1,10 @@
 from datetime import timedelta
 
 from feast import Entity, FeatureView, Field, FileSource
+from feast.data_format import ParquetFormat
 from feast.types import Float64
+
+from s3_config import S3_ENDPOINT, TRANSACTIONS_PARQUET_URI
 
 transaction = Entity(
     name="transaction",
@@ -10,8 +13,10 @@ transaction = Entity(
 
 transaction_source = FileSource(
     name="transaction_source",
-    path="data/transactions_sample.parquet",
+    path=TRANSACTIONS_PARQUET_URI,
     timestamp_field="event_timestamp",
+    file_format=ParquetFormat(),
+    s3_endpoint_override=S3_ENDPOINT,
 )
 
 transaction_features = FeatureView(

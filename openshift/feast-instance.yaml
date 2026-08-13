@@ -1,10 +1,12 @@
 # FeatureStore instance for the credit card fraud demo.
-# Apply after pushing feast/ to the git repo referenced below:
-#   oc apply -n credit-card-fraud -f openshift/feast-instance.yaml
+# Training data lives in MinIO (shared-s3); definitions stay in git (feast/).
 #
-# Verify:
-#   oc get pods -n credit-card-fraud -l feast.dev/feature-store=credit-fraud-feast
-#   oc get svc -n credit-card-fraud -l feast.dev/service-type=online
+# Prerequisites:
+#   1. Upload parquet: python feast/scripts/upload_to_s3.py
+#   2. Push feast/ to git, then apply this CR:
+#      oc apply -n credit-card-fraud -f openshift/feast-instance.yaml
+#
+# Uses secret `shared-s3` in this namespace (same keys as MLflow data connections).
 ---
 apiVersion: feast.dev/v1
 kind: FeatureStore
@@ -18,8 +20,20 @@ spec:
     git:
       url: https://github.com/pdavis327/credit-fraud-detection-demo
       ref: main
+      featureRepoPath: feast
+      envFrom:
+        - secretRef:
+            name: shared-s3
   services:
     registry:
       local:
         server:
           restAPI: true
+          envFrom:
+            - secretRef:
+                name: shared-s3
+    onlineStore:
+      server:
+        envFrom:
+          - secretRef:
+              name: shared-s3

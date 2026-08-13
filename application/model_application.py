@@ -6,7 +6,6 @@ from pathlib import Path
 
 import gradio as gr
 import numpy as np
-import pandas as pd
 import requests
 import yaml
 from feast import FeatureStore
@@ -44,16 +43,13 @@ def _load_scaler_params() -> tuple[np.ndarray, np.ndarray]:
 
 
 def _load_transaction_choices() -> list[tuple[str, int]]:
-    parquet_path = FEAST_REPO_PATH / "data" / "transactions_sample.parquet"
-    df = pd.read_parquet(parquet_path)
-    fraud_ids = df.loc[df["fraud"] == 1, "transaction_id"].head(5)
-    safe_ids = df.loc[df["fraud"] == 0, "transaction_id"].head(5)
-    sample_ids = pd.concat([fraud_ids, safe_ids]).drop_duplicates()
-    choices: list[tuple[str, int]] = []
-    for transaction_id in sample_ids:
-        label = "fraud" if df.loc[df["transaction_id"] == transaction_id, "fraud"].iloc[0] else "not fraud"
-        choices.append((f"{int(transaction_id)} (actual: {label})", int(transaction_id)))
-    return choices
+    examples_path = FEAST_REPO_PATH / "transaction_examples.json"
+    with open(examples_path) as examples_file:
+        examples = json.load(examples_file)
+    return [
+        (f"{item['transaction_id']} (actual: {item['label']})", int(item["transaction_id"]))
+        for item in examples
+    ]
 
 
 def _build_feast_store() -> FeatureStore:
